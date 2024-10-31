@@ -1,0 +1,134 @@
+---
+title: "predictions"
+author:"Nicole"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r }
+# Load necessary libraries
+library(caret)
+library(dplyr)
+library(ggplot2)
+library(randomForest)
+
+
+```
+```{r }
+# Load necessary libraries
+# Load the training and testing data
+train_url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+test_url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+train_data <- read.csv(train_url, na.strings = c("NA", "", " "))
+test_data <- read.csv(test_url, na.strings = c("NA", "", " "))
+
+
+
+
+```
+## Including Plots
+
+```{r }
+
+# Remove columns with mostly NA values and irrelevant columns
+train_data <- train_data %>% select_if(~ sum(is.na(.)) < 0.9 * nrow(train_data))
+train_data <- train_data[, -c(1:7)] # Remove metadata columns (e.g., ID)
+
+```
+
+
+You can also embed plots, for example:
+
+```{r}
+set.seed(123)
+trainIndex <- createDataPartition(train_data$classe, p = 0.7, list = FALSE)
+training <- train_data[trainIndex,]
+validation <- train_data[-trainIndex,]
+
+```
+
+
+```{r}
+# Visualize the distribution of classes
+ggplot(training, aes(x = classe)) +
+  geom_bar() +
+  labs(title = "Distribution of Exercise Classes", x = "Class", y = "Count")
+
+# Check correlation for feature selection
+correlations <- cor(training[, sapply(training, is.numeric)])
+
+```
+```{r}
+# Train a Random Forest model
+# Convert `classe` to a factor if it's not already
+
+training$classe <- as.factor(training$classe)
+validation$classe <- as.factor(validation$classe)
+
+# Convert any character columns to numeric or remove them if irrelevant
+training <- training %>% mutate_if(is.character, as.numeric)
+validation <- validation %>% mutate_if(is.character, as.numeric)
+
+# Remove columns with mostly NA values and irrelevant columns
+training <- training %>% select_if(~ sum(is.na(.)) < 0.9 * nrow(training))
+validation <- validation %>% select_if(~ sum(is.na(.)) < 0.9 * nrow(validation))
+
+# Fit the random forest model
+set.seed(123)
+model_rf <- randomForest(classe ~ ., data = training, importance = TRUE)
+
+# Check model accuracy on validation set
+pred_valid <- predict(model_rf, validation)
+conf_matrix <- confusionMatrix(pred_valid, validation$classe)
+print(conf_matrix)
+
+```
+
+```{r}
+# Define cross-validation parameters
+control <- trainControl(method = "cv", number = 5)
+model_cv <- train(classe ~ ., data = training, method = "rf", trControl = control)
+
+# Expected out-of-sample error
+print(model_cv)
+
+```
+
+```{r}
+# Load necessary libraries
+library(rpart)
+library(rpart.plot)
+
+# Create a single decision tree for visualization
+set.seed(123)
+model_tree <- rpart(classe ~ ., data = training, method = "class")
+
+# Plot the decision tree
+rpart.plot(model_tree, type = 3, extra = 102, fallen.leaves = TRUE, main = "Decision Tree for Classe Prediction")
+
+```
+
+
+
+```{r}
+# Predict on test data
+predictions <- predict(model_rf, test_data)
+predictions
+
+```
+
+```{r}
+# Save predictions for submission
+write.csv(predictions, "predictions.csv", row.names = FALSE)
+
+```
+
